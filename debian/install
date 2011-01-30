@@ -1,0 +1,5 @@
+adminx.conf /etc
+adminx-script /bin
+adminx-cronscript /etc/cron.d
+
+

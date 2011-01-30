@@ -1,0 +1,12 @@
+Source: adminx
+Section: unknown
+Priority: extra
+Maintainer: pnegre <pnegre@unknown>
+Build-Depends: debhelper (>= 7)
+Standards-Version: 3.8.3
+
+Package: adminx
+Architecture: all
+Depends: ${misc:Depends} python
+Description: Config tool for managing computers
+ Config tool for managing computers

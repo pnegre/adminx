@@ -1,0 +1,10 @@
+Package: adminx
+Version: 0.2
+Architecture: all
+Maintainer: pnegre <pnegre@unknown>
+Installed-Size: 64
+Depends: python
+Section: unknown
+Priority: extra
+Description: Config tool for managing computers
+ Config tool for managing computers

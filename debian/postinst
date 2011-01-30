@@ -1,0 +1,14 @@
+#!/bin/bash
+
+>/etc/adminx.conf
+
+echo
+echo
+
+echo -n "Servidor? "
+read SERVER
+echo "SERVER=$SERVER" > /etc/adminx.conf
+echo -n "Grup? "
+read GROUP
+echo "GROUP=$GROUP" >> /etc/adminx.conf
+

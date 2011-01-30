@@ -1,0 +1,178 @@
+#!/usr/bin/python
+
+
+
+# LAYOUT pel client (suposant que els fitxers son a /var/adminx):
+#
+# /var/adminx/packages.txt
+# /var/adminx/files/...
+# /var/adminx/debs/...
+# /var/adminx/delete/...
+# /var/adminx/scripts/...
+#
+# Es necessari muntar un rsync en mode daemon al servidor
+# - Modificar el /etc/default/rsync  (RSYNC_ENABLE=true)
+# - Crear el /etc/rsyncd.conf
+#   Amb els continguts:
+#
+#     [adminx]
+#        path = /var/adminx
+#        comment = adminx
+
+
+
+
+import os
+import sys
+import re
+
+import hashlib
+
+SERVER = "192.168.100.10"
+GROUP = "adminx"
+DST_DIR = "/var/adminx-client/adminx"
+TOUCH_FILE = "/var/adminx-client/adminx.touch"
+
+global_errors = 0
+
+
+def get_config_values():
+	f = open("/etc/adminx.conf")
+	for l in f:
+		if re.match("^SERVER=", l):
+			global SERVER
+			SERVER = l.split("=")[1].rstrip("\n")
+		if re.match("^GROUP=", l):
+			global GROUP
+			GROUP = l.split("=")[1].rstrip("\n")
+
+
+def get_sha_hash(directory):
+	SHAhash = hashlib.sha1()
+	if not os.path.exists(directory):
+		return -1
+
+	for root, dirs, files in os.walk(directory):
+		for names in files:
+			filepath = os.path.join(root,names)
+			print "Hashing", names
+			f1 = open(filepath,'rb')
+			while 1:
+				buf = f1.read(4096)
+				if not buf: break
+				SHAhash.update(hashlib.sha1(buf).hexdigest())
+			f1.close()
+	
+	return SHAhash.hexdigest()
+
+
+
+	
+
+def execute_command(c):
+	print "> %s" % c
+	r = os.system(c)
+	if r != 0:
+		sys.stderr.write("Error in command %s \n" %c)
+		global global_errors
+		global_errors += 1
+
+
+def install_package(p):
+	execute_command("apt-get install -y %s" %p)
+
+
+def delete_package(p):
+	execute_command("apt-get remove -y %s" %p)
+
+
+# Create new files
+def create_new_files():
+	adminx_dir = DST_DIR + "/files/"
+	for d1, d2, fls in os.walk(adminx_dir):
+		if fls:
+			for f in fls:
+				direct = "/" + re.findall(adminx_dir + "(.*)", d1)[0]
+				com1 = "mkdir -p " + direct
+				com2 = "rsync " + d1 + '/' + f + " " + direct + "/" + f
+				execute_command(com1)
+				execute_command(com2)
+
+
+# Delete files
+def delete_files():
+	adminx_dir = DST_DIR + "/delete/"
+	for d1, d2, fls in os.walk(adminx_dir):
+		if fls:
+			for f in fls:
+				direct = "/" + re.findall(adminx_dir + "(.*)", d1)[0]
+				com = "rm -f " + direct + "/" + f
+				execute_command(com)
+
+
+# Install packages directly, from .deb files
+def install_packages():
+	adminx_dir = DST_DIR + "/debs/"
+	for deb in os.listdir(adminx_dir):
+		execute_command("DEBIAN_FRONTEND=noninteractive dpkg -i " + adminx_dir + deb)
+
+
+# Execute scripts
+def execute_scripts():
+	adminx_dir = DST_DIR + "/scripts/"
+	for f in os.listdir(adminx_dir):
+		execute_command(adminx_dir + f)
+
+
+
+# Install programs from debian/ubuntu repositories
+def install_packages_from_repos():
+	f = open(DST_DIR + "/packages.txt")
+	for l in f:
+		if re.match('^install', l):
+			install_package(l.split()[1])
+		elif re.match('^delete', l):
+			delete_package(l.split()[1])
+
+
+
+
+
+#################################################
+############ MAIN PROGRAM #######################
+#################################################
+
+
+get_config_values()
+execute_command("mkdir -p %s" % DST_DIR)
+SERVER_STRING = SERVER + "::" + GROUP
+
+
+if os.path.isfile(TOUCH_FILE):
+	execute_command("rsync -avz --delete %s %s" % (SERVER_STRING, DST_DIR))
+else:
+	execute_command("touch " + TOUCH_FILE)
+	sha1 = get_sha_hash(DST_DIR)
+	execute_command("rsync -avz --delete %s %s" % (SERVER_STRING, DST_DIR))
+	sha2 = get_sha_hash(DST_DIR)
+	print sha1, sha2
+	if sha1 == sha2:
+		print "Nothing to be done"
+		execute_command("rm -f " + TOUCH_FILE)
+		sys.exit(0)
+
+
+install_packages_from_repos()
+create_new_files()
+delete_files()
+install_packages()
+execute_scripts()
+
+
+if global_errors == 0:
+	execute_command("rm -f " + TOUCH_FILE)
+	
+
+
+ 
+
